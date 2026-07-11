@@ -186,7 +186,7 @@ async def upload_handler(bot: Client, m: Message):
                     if match:
                         url = match.group(1)
 
-        # ---------- ClassPlus (working) ----------
+        # ========== FIXED CLASSPLUS LOGIC ==========
         elif any(x in url for x in ["classplusapp", "testbook.com", "classplusapp.com/drm", "media-cdn.classplusapp.com/drm"]):
             if working_token.lower() == "no":
                 await m.reply_text(f"⚠️ Token required, skipping: {title}")
@@ -194,7 +194,13 @@ async def upload_handler(bot: Client, m: Message):
             if '&contentHashIdl=' not in url:
                 await m.reply_text(f"❌ Invalid ClassPlus URL (missing contentHashIdl): {url[:100]}")
                 continue
+            
             base_url, contentId = url.split('&contentHashIdl=', 1)
+            
+            # URL encode the contentId to handle special characters like +, /, =
+            from urllib.parse import quote
+            encoded_contentId = quote(contentId, safe='')
+            
             headers = {
                 'host': 'api.classplusapp.com',
                 'x-access-token': working_token,
@@ -208,19 +214,66 @@ async def upload_handler(bot: Client, m: Message):
                 'region': 'IN',
                 'user-agent': 'Mobile-Android',
             }
-            params = {'contentId': contentId, 'offlineDownload': "false"}
+            params = {
+                'contentId': encoded_contentId,  # Use encoded value
+                'offlineDownload': "false"
+            }
+            
             try:
-                resp = requests.get("https://api.classplusapp.com/cams/uploader/video/jw-signed-url", params=params, headers=headers).json()
-                if 'error' in resp or 'Error' in resp:
-                    await m.reply_text(f"❌ ClassPlus API error: {resp.get('error', resp.get('Error', 'Invalid token'))}")
+                # Debug: print request details
+                print(f"[DEBUG] ClassPlus Request - URL: https://api.classplusapp.com/cams/uploader/video/jw-signed-url")
+                print(f"[DEBUG] Params: {params}")
+                print(f"[DEBUG] Headers: {headers}")
+                
+                resp = requests.get(
+                    "https://api.classplusapp.com/cams/uploader/video/jw-signed-url",
+                    params=params,
+                    headers=headers
+                )
+                
+                # Debug: print response
+                print(f"[DEBUG] Response Status: {resp.status_code}")
+                print(f"[DEBUG] Response Text: {resp.text[:500]}")
+                
+                # Check status code
+                if resp.status_code != 200:
+                    await m.reply_text(f"❌ ClassPlus API HTTP error: {resp.status_code} - {resp.text[:200]}")
                     continue
+                
+                resp_data = resp.json()
+                
+                # Check for error responses
+                if resp_data.get('status') == 'failure':
+                    await m.reply_text(f"❌ ClassPlus API error: {resp_data.get('message', 'Unknown error')}")
+                    continue
+                if 'error' in resp_data or 'Error' in resp_data:
+                    await m.reply_text(f"❌ ClassPlus API error: {resp_data.get('error', resp_data.get('Error', 'Invalid token'))}")
+                    continue
+                    
+                # Extract URL
                 if "testbook.com" in url or "classplusapp.com/drm" in url or "media-cdn.classplusapp.com/drm" in url:
-                    url = resp['drmUrls']['manifestUrl']
+                    if 'drmUrls' in resp_data and 'manifestUrl' in resp_data['drmUrls']:
+                        url = resp_data['drmUrls']['manifestUrl']
+                    else:
+                        await m.reply_text(f"❌ No manifestUrl in response: {resp_data}")
+                        continue
                 else:
-                    url = resp["url"]
+                    if 'url' in resp_data:
+                        url = resp_data['url']
+                    else:
+                        await m.reply_text(f"❌ No url in response: {resp_data}")
+                        continue
+                        
+            except requests.exceptions.RequestException as e:
+                await m.reply_text(f"❌ ClassPlus network error: {e}")
+                continue
+            except ValueError as e:
+                await m.reply_text(f"❌ ClassPlus JSON parse error: {e}")
+                continue
             except Exception as e:
                 await m.reply_text(f"❌ ClassPlus API exception: {e}")
                 continue
+        # ============================================================
 
         # ---------- PW (PhysicsWallah) - NO MODIFICATION, JUST WRAP ----------
         elif "childId" in url and "parentId" in url:
