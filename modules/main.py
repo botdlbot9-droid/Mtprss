@@ -163,7 +163,7 @@ async def account_login(bot: Client, m: Message):
                         url = re.search(r"(https://.*?playlist.m3u8.*?)\"", text).group(1)
 
             # ========== NEW: ClassPlus logic (exactly from new.py) ==========
-            elif 'classplusapp' in url or "testbook.com" in url or "classplusapp.com/drm" in url or "media-cdn.classplusapp.com/drm" in url:
+            elif 'classplusapp' in url or "testbook.com" in url or "classplusapp.com/drm" in url or "media-cdn.classplusapp.com/drm" in url or "media-cdn.classplusapp.com" in url:
                 if working_token.lower() == "no":
                     await m.reply_text(f"⚠️ Token required, skipping: {links[i][0]}")
                     continue
@@ -196,7 +196,7 @@ async def account_login(bot: Client, m: Message):
                     if 'error' in res or 'Error' in res:
                         await m.reply_text(f"❌ ClassPlus API error: {res.get('error', res.get('Error', 'Invalid token'))}")
                         continue
-                    if "testbook.com" in url or "classplusapp.com/drm" in url or "media-cdn.classplusapp.com/drm" in url:
+                    if "testbook.com" in url or "classplusapp.com/drm" in url or "media-cdn.classplusapp.com" in url or "media-cdn.classplusapp.com/drm" in url:
                         url = res['drmUrls']['manifestUrl']
                     else:
                         url = res["url"]
