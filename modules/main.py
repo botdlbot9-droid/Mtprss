@@ -8,6 +8,7 @@ import requests
 import subprocess
 from urllib.parse import quote
 
+# Import your existing modules
 from vars import API_ID, API_HASH, BOT_TOKEN, WEBHOOK, PORT
 from aiohttp import ClientSession, web
 from pyromod import listen
@@ -17,8 +18,9 @@ from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
 from pyrogram.errors import FloodWait
 from style import Ashu
 
-# ========== CUSTOM DOWNLOAD (NO PROGRESS BAR ERRORS) ==========
+# ========== CUSTOM DOWNLOAD FUNCTION (NO PROGRESS BAR ERRORS) ==========
 async def download_video_direct(url, output_path, quality=None):
+    """Download video using yt-dlp with quiet mode. Returns output path."""
     os.makedirs("downloads", exist_ok=True)
     if quality and "youtu" in url:
         fmt = f"b[height<={quality}][ext=mp4]/bv[height<={quality}][ext=mp4]+ba[ext=m4a]/b[ext=mp4]"
@@ -26,19 +28,36 @@ async def download_video_direct(url, output_path, quality=None):
         fmt = f"b[height<={quality}]/bv[height<={quality}]+ba/b/bv+ba"
     else:
         fmt = "best"
-    cmd = ["yt-dlp", "--quiet", "--no-progress", "-f", fmt, "-o", output_path, url]
-    process = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+    
+    cmd = [
+        "yt-dlp",
+        "--quiet", "--no-progress",
+        "-f", fmt,
+        "-o", output_path,
+        url
+    ]
+    
+    process = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE
+    )
     _, stderr = await process.communicate()
+    
     if process.returncode != 0:
         raise Exception(f"yt-dlp error: {stderr.decode()}")
+    
+    # Check if file exists
     if os.path.exists(output_path):
         return output_path
+    # Sometimes yt-dlp adds extension
     if not output_path.endswith('.mp4') and os.path.exists(output_path + '.mp4'):
         return output_path + '.mp4'
-    raise Exception("File not found after download")
+    raise Exception("Downloaded file not found")
 
 bot = Client("bot", api_id=API_ID, api_hash=API_HASH, bot_token=BOT_TOKEN)
 
+# ========== WEBHOOK ROUTES ==========
 routes = web.RouteTableDef()
 @routes.get("/", allow_head=True)
 async def root_route_handler(request):
@@ -48,12 +67,16 @@ async def web_server():
     web_app.add_routes(routes)
     return web_app
 
+# ========== BOT COMMANDS ==========
 @bot.on_message(filters.command(["start"]))
 async def start_cmd(bot: Client, m: Message):
-    await m.reply_text(Ashu.START_TEXT, reply_markup=InlineKeyboardMarkup([
-        [InlineKeyboardButton("✜ ᴀsʜᴜᴛᴏsʜ ɢᴏsᴡᴀᴍɪ 𝟸𝟺 ✜", url="https://t.me/AshutoshGoswami24")],
-        [InlineKeyboardButton("🦋 𝐅𝐨𝐥𝐥𝐨𝐰 𝐌𝐞 🦋", url="https://t.me/AshuSupport")]
-    ]))
+    await m.reply_text(
+        Ashu.START_TEXT,
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("✜ ᴀsʜᴜᴛᴏsʜ ɢᴏsᴡᴀᴍɪ 𝟸𝟺 ✜", url="https://t.me/AshutoshGoswami24")],
+            [InlineKeyboardButton("🦋 𝐅𝐨𝐥𝐥𝐨𝐰 𝐌𝐞 🦋", url="https://t.me/AshuSupport")]
+        ])
+    )
 
 @bot.on_message(filters.command("stop"))
 async def restart_handler(_, m):
@@ -98,6 +121,7 @@ async def upload_handler(bot: Client, m: Message):
     raw_text2 = input2.text
     await input2.delete(True)
 
+    # Resolution mapping
     try:
         if raw_text2 == "144":
             res = "256x144"
@@ -122,6 +146,7 @@ async def upload_handler(bot: Client, m: Message):
     await input3.delete(True)
     MR = "️ ⁪⁬⁮⁮⁮" if raw_text3 == 'Robin' else raw_text3
 
+    # Token for PW/ClassPlus
     await editable.edit("**Enter Your PW/Classplus Working Token\n\nOtherwise Send No**")
     input4 = await bot.listen(editable.chat.id)
     working_token = input4.text
@@ -142,10 +167,10 @@ async def upload_handler(bot: Client, m: Message):
 
     count = int(raw_text) if len(links) > 1 else 1
 
+    # ========== MAIN LOOP ==========
     for i in range(count - 1, len(links)):
         title = links[i][0]
-        original_url = "https://" + links[i][1]
-        url = original_url  # start with original
+        url = "https://" + links[i][1]
 
         # Skip invalid links
         if not url.startswith(('http://','https://')) or 't.me/' in url:
@@ -161,58 +186,43 @@ async def upload_handler(bot: Client, m: Message):
                     if match:
                         url = match.group(1)
 
-        # ---------- ClassPlus (with fallback) ----------
+        # ---------- ClassPlus (working) ----------
         elif any(x in url for x in ["classplusapp", "testbook.com", "classplusapp.com/drm", "media-cdn.classplusapp.com/drm"]):
             if working_token.lower() == "no":
                 await m.reply_text(f"⚠️ Token required, skipping: {title}")
                 continue
-            
-            # Try API only if contentHashIdl exists
-            if '&contentHashIdl=' in url:
-                base_url, contentId = url.split('&contentHashIdl=', 1)
-                headers = {
-                    'host': 'api.classplusapp.com',
-                    'x-access-token': working_token,
-                    'accept-language': 'EN',
-                    'api-version': '18',
-                    'app-version': '1.4.73.2',
-                    'build-number': '35',
-                    'content-type': 'application/json',
-                    'device-details': 'Xiaomi_Redmi 7_SDK-32',
-                    'device-id': 'c28d3cb16bbdac01',
-                    'region': 'IN',
-                    'user-agent': 'Mobile-Android',
-                }
-                params = {'contentId': contentId, 'offlineDownload': "false"}
-                try:
-                    resp = requests.get("https://api.classplusapp.com/cams/uploader/video/jw-signed-url", params=params, headers=headers).json()
-                    print(f"ClassPlus API response: {resp}")  # debug
-                    
-                    # Check for failure
-                    if resp.get('status') == 'failure':
-                        error_msg = resp.get('message', 'Unknown error')
-                        await m.reply_text(f"❌ ClassPlus API failed: {error_msg}\nFalling back to direct download...")
-                        # Keep original URL (fallback)
-                        url = original_url
-                    elif 'error' in resp or 'Error' in resp:
-                        await m.reply_text(f"❌ ClassPlus API error: {resp.get('error', resp.get('Error', 'Invalid token'))}")
-                        # Keep original URL (fallback)
-                        url = original_url
-                    else:
-                        # Success - extract URL
-                        if "testbook.com" in url or "classplusapp.com/drm" in url or "media-cdn.classplusapp.com/drm" in url:
-                            url = resp['drmUrls']['manifestUrl']
-                        else:
-                            url = resp["url"]
-                except Exception as e:
-                    await m.reply_text(f"❌ ClassPlus API exception: {e}\nFalling back to direct download...")
-                    url = original_url  # fallback
-            else:
-                # No contentHashIdl – direct download
-                await m.reply_text(f"ℹ️ No contentHashIdl found, downloading directly...")
-                url = original_url
+            if '&contentHashIdl=' not in url:
+                await m.reply_text(f"❌ Invalid ClassPlus URL (missing contentHashIdl): {url[:100]}")
+                continue
+            base_url, contentId = url.split('&contentHashIdl=', 1)
+            headers = {
+                'host': 'api.classplusapp.com',
+                'x-access-token': working_token,
+                'accept-language': 'EN',
+                'api-version': '18',
+                'app-version': '1.4.73.2',
+                'build-number': '35',
+                'content-type': 'application/json',
+                'device-details': 'Xiaomi_Redmi 7_SDK-32',
+                'device-id': 'c28d3cb16bbdac01',
+                'region': 'IN',
+                'user-agent': 'Mobile-Android',
+            }
+            params = {'contentId': contentId, 'offlineDownload': "false"}
+            try:
+                resp = requests.get("https://api.classplusapp.com/cams/uploader/video/jw-signed-url", params=params, headers=headers).json()
+                if 'error' in resp or 'Error' in resp:
+                    await m.reply_text(f"❌ ClassPlus API error: {resp.get('error', resp.get('Error', 'Invalid token'))}")
+                    continue
+                if "testbook.com" in url or "classplusapp.com/drm" in url or "media-cdn.classplusapp.com/drm" in url:
+                    url = resp['drmUrls']['manifestUrl']
+                else:
+                    url = resp["url"]
+            except Exception as e:
+                await m.reply_text(f"❌ ClassPlus API exception: {e}")
+                continue
 
-        # ---------- PW (PhysicsWallah) ----------
+        # ---------- PW (PhysicsWallah) - NO MODIFICATION, JUST WRAP ----------
         elif "childId" in url and "parentId" in url:
             if working_token.lower() == "no":
                 await m.reply_text(f"⚠️ PW token required, skipping: {title}")
@@ -220,9 +230,7 @@ async def upload_handler(bot: Client, m: Message):
             encoded_url = quote(url, safe='')
             url = f"https://anonymouspwplayer-907e62cf4891.herokuapp.com/pw?url={encoded_url}&token={working_token}"
 
-        # ---------- No .mpd conversion ----------
-
-        # Prepare filename and caption
+        # ---------- Prepare filename and caption ----------
         name1 = title.replace("\t", "").replace(":", "").replace("/", "").replace("+", "").replace("#", "").replace("|", "").replace("@", "").replace("*", "").replace(".", "").replace("https", "").replace("http", "").strip()
         name = f'{str(count).zfill(3)}) {name1[:60]}'
         safe_name = name.replace(" ", "_").replace(")", "").replace("(", "")
@@ -231,10 +239,10 @@ async def upload_handler(bot: Client, m: Message):
         cc = f'**[ 🎥 ] Vid_ID:** {str(count).zfill(3)}. {name1}{MR}\n✉️ 𝐁𝐚𝐭𝐜𝐡 » **{raw_text0}**'
         cc1 = f'**[ 📁 ] Pdf_ID:** {str(count).zfill(3)}. {name1}{MR}.pdf \n✉️ 𝐁𝐚𝐭𝐜𝐡 » **{raw_text0}**'
 
-        # Download
+        # ---------- Download ----------
         try:
             if "drive.google.com" in url or "drive" in url:
-                await m.reply_text(f"⚠️ Drive links not supported. Skipping.")
+                await m.reply_text(f"⚠️ Drive links not supported in this version. Skipping.")
                 count += 1
                 continue
             elif ".pdf" in url.lower():
@@ -260,6 +268,7 @@ async def upload_handler(bot: Client, m: Message):
 
     await m.reply_text("✅ 𝐒𝐮𝐜𝐜𝐞𝐬𝐬𝐟𝐮𝐥𝐥𝐲 𝐃𝐨𝐧𝐞")
 
+# ========== WEBHOOK AND MAIN ==========
 async def main():
     if WEBHOOK:
         app = await web_server()
