@@ -163,7 +163,7 @@ async def account_login(bot: Client, m: Message):
                         url = re.search(r"(https://.*?playlist.m3u8.*?)\"", text).group(1)
 
             # ========== NEW: ClassPlus logic (exactly from new.py) ==========
-            elif 'classplusapp' in url or "testbook.com" in url or "classplusapp.com/drm" in url or "media-cdn.classplusapp.com/drm" in url or "media-cdn.classplusapp.com" in url:
+            elif 'classplusapp' in url or "testbook.com" in url or "classplusapp.com/drm " in url or "media-cdn.classplusapp.com/drm" in url or "media-cdn.classplusapp.com" in url:
                 if working_token.lower() == "no":
                     await m.reply_text(f"⚠️ Token required, skipping: {links[i][0]}")
                     continue
